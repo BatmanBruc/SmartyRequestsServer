@@ -1,11 +1,11 @@
 import { Schema, model } from 'mongoose';
 
-interface IField {
-  title: string;
-  name: string;
-  inputType: number,
-  required: boolean,
-  options: Array<string>
+export interface IField {
+  title: string
+  name: string
+  inputType: number
+  required: boolean
+  options?: Array<string>
   default?: ( string | number | boolean )
 }
 const fieldSchema = new Schema<IField>({
@@ -17,4 +17,5 @@ const fieldSchema = new Schema<IField>({
   default: Schema.Types.Mixed
 });
 
-export default model<IField>('Field', fieldSchema)
+
+export class Field extends model<IField>('Field', fieldSchema){}

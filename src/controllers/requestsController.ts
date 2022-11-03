@@ -1,6 +1,7 @@
+import { Types } from 'mongoose';
 import Request from '../models/requestModel';
 import { IResponseSuccess, RequestEnity, typeParamsOrParams } from '../services/requestsService'
-import { FIELD_REQUIRED, NOT_FOUND_REQUEST_ID } from '../services/errorsService'
+import { FIELD_REQUIRED, NOT_FOUND_REQUEST_ID, BAD_ID } from '../services/errorsService'
 
 interface RequestSerializerType{
     id: string
@@ -69,7 +70,16 @@ class RequestRequestEnity extends RequestEnity{
         }
         return { data: this.body, request }
     }
-    async verifyRemoveRequest(schema: any, res: any): Promise<false | InstanceType<typeof Request>>{
+    async verifyIsRequest(schema: any, res: any): Promise<false | InstanceType<typeof Request>>{
+        if(!this.params.id || !Types.ObjectId.isValid(this.params.id)){
+            res.status(BAD_ID[1])
+            res.send({ 
+                description: BAD_ID[0],
+                extra: this.params.id,
+                status: BAD_ID[1]
+            })
+            return false
+        }
         let request: ( InstanceType<typeof Request> | null ) = null
         request = await Request.findById(this.params.id).exec()
         if(!request){
@@ -83,6 +93,13 @@ class RequestRequestEnity extends RequestEnity{
         }
         return request
     }
+}
+const getRequest = async (req: any, res: any)=>{
+    const requestRequest = new RequestRequestEnity(req.body, req.params)
+    let request = await requestRequest.verifyIsRequest(Request.schema.obj, res)
+    if(!request) return
+    let content = RequestSerializer(request)
+    res.send(content)
 }
 const getRequests = async (req: any, res: any)=>{
     const requestRequest = new RequestRequestEnity(req.body, req.params)
@@ -141,7 +158,7 @@ const changeRequest = async (req: any, res: any)=>{
 }
 const deleteRequest = async (req: any, res: any)=>{
     const requestRequest = new RequestRequestEnity(req.body, req.params)
-    let request = await requestRequest.verifyRemoveRequest(Request.schema.obj, res)
+    let request = await requestRequest.verifyIsRequest(Request.schema.obj, res)
     if(!request) return 
     request.remove()
     let response: IResponseSuccess = {
@@ -152,6 +169,7 @@ const deleteRequest = async (req: any, res: any)=>{
     res.send(response)
 }
 export {
+    getRequest,
     getRequests,
     setRequest,
     changeRequest,
