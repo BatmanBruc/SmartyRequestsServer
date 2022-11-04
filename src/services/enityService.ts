@@ -1,21 +1,23 @@
-interface IResponse {
+import { SchemaType } from 'mongoose'
+
+interface IRejoin {
     description?: string
     content?: any
     status: number
 }
 
-interface IResponseError extends IResponse {
+interface IRejoinError extends IRejoin {
     status: ( 400 | 401 | 403 | 404 )
 }
-interface IResponseSuccess extends IResponse {
+interface IRejoinSuccess extends IRejoin {
     status: 200
 }
 
-abstract class Response{
+export abstract class Rejoin{
     description?: string
     content?: any
     status: number
-    constructor(data: IResponse){
+    constructor(data: IRejoin){
         this.description = data.description
         this.content = data.content
         this.status = data.status
@@ -31,15 +33,15 @@ abstract class Response{
     }
 }
 
-export class ResponseError extends Response{
+export class RejoinError extends Rejoin{
     status: ( 400 | 401 | 403 | 404 )
-    constructor(data: IResponseError){
+    constructor(data: IRejoinError){
         super(data)
     }
 }
-export class ResponseSuccess extends Response{
+export class RejoinSuccess extends Rejoin{
     status: 200
-    constructor(data: IResponseSuccess){
+    constructor(data: IRejoinSuccess){
         super(data)
     }
 }
@@ -49,9 +51,11 @@ type typeParamsOrParams = {
     [key: string]: any
 }
 
-abstract class RequestEnity{
+abstract class Enity{
     data?: typeParamsOrParams = {}
-    verifyBodyToSchema(schema: any): string[]{
+    verifyBodyToSchema(schema: {
+        [key: string]: SchemaType<any>;
+    }): string[]{
         let missing_fields = []
         for( let prop in schema){
             if(schema[prop].isRequired){
@@ -64,9 +68,16 @@ abstract class RequestEnity{
         return missing_fields
     }
 }
+
+
+export type IPagination = {
+    limit: number;
+    skip: number;
+}
+
 export {
-    IResponseError,
-    IResponseSuccess,
-    RequestEnity,
+    IRejoinError,
+    IRejoinSuccess,
+    Enity,
     typeParamsOrParams
 }

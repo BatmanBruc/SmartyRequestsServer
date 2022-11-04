@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { Field } from '../models/fieldModel'
 import Request from '../models/requestModel'
 import { FIELD_REQUIRED, NOT_FOUND_FIELD_ID, FIELD_ALREADY_EXISTS, BAD_ID } from './errorsService'
-import { RequestEnity, ResponseError, ResponseSuccess } from './requestService'
+import { Enity, Rejoin, RejoinError, RejoinSuccess } from './enityService'
 
 const enum InputTypes {
     INPUT,
@@ -48,18 +48,7 @@ export type IFieldPagination = {
     skip: number;
 }
 
-interface FieldRequestEnityType{
-    verifyIsField(): Promise<ResponseError | Field>
-    verifySetField(): Promise<ResponseError | true>
-    verifyChangeField(): Promise<ResponseError | Field>
-
-    // getOne(): Promise<ResponseError | ResponseSuccess>
-    // getList(): Promise<ResponseError | ResponseSuccess>
-    // setField(): Promise<ResponseError | ResponseSuccess>
-    // deleteField(): Promise<ResponseError | ResponseSuccess>
-}
-
-class FieldRequestEnity extends RequestEnity implements FieldRequestEnityType{
+class FieldEnity extends Enity{
     id?:string
     data?: IFieldData
     pagination?: IFieldPagination
@@ -73,17 +62,17 @@ class FieldRequestEnity extends RequestEnity implements FieldRequestEnityType{
         this.data = params.data
         this.pagination = params.pagination
     }
-    async verifyIsField(){
+    async verifyIsField(): Promise<RejoinError | Field>{
         if(!this.id || !Types.ObjectId.isValid(this.id)){
-            return new ResponseError({ 
+            return new RejoinError({ 
                 description: BAD_ID[0],
                 content: this.id,
                 status: BAD_ID[1]
             })
         }
-        let field = await Field.findById(this.id).exec()
+        let field: Field | null = await Field.findById(this.id).exec()
         if(!field){
-            return new ResponseError({ 
+            return new RejoinError({ 
                 description: NOT_FOUND_FIELD_ID[0],
                 content: this.id,
                 status: NOT_FOUND_FIELD_ID[1]
@@ -91,19 +80,10 @@ class FieldRequestEnity extends RequestEnity implements FieldRequestEnityType{
         }
         return field
     }
-    async verifySetField(){
-        let missing_fields = this.verifyBodyToSchema(Field.schema.paths)
-        if(missing_fields.length){
-            return new ResponseError({
-                description: FIELD_REQUIRED[0],
-                content: missing_fields,
-                status: FIELD_REQUIRED[1]
-            })
-        }
-        let field = null
-        field = await Field.exists({name: this.data.name})
+    async verifySetField(): Promise<RejoinError | true>{
+        let field: { _id: Types.ObjectId } | null = await Field.exists({name: this.data.name})
         if(field){
-            return new ResponseError({
+            return new RejoinError({
                 description: FIELD_ALREADY_EXISTS[0],
                 content: this.data.name,
                 status: FIELD_ALREADY_EXISTS[1]
@@ -111,57 +91,42 @@ class FieldRequestEnity extends RequestEnity implements FieldRequestEnityType{
         }
         return true
     }
-    async verifyChangeField(){
-        if(!this.id || !Types.ObjectId.isValid(this.id)){
-            return new ResponseError({ 
-                description: BAD_ID[0],
-                content: this.id,
-                status: BAD_ID[1]
-            })
-        }
-        let field = await Field.findById(this.id).exec()
-        if(!field){
-            return new ResponseError({ 
-                description: NOT_FOUND_FIELD_ID[0],
-                content: this.id,
-                status: NOT_FOUND_FIELD_ID[1]
-            })
-        }
+    async verifySetData(): Promise<RejoinError | true>{
         let missing_fields: Array<string> = this.verifyBodyToSchema(Field.schema.paths)
         if(missing_fields.length){
-            return new ResponseError({
+            return new RejoinError({
                 description: FIELD_REQUIRED[0],
                 content: missing_fields,
                 status: FIELD_REQUIRED[1]
             })
         }
-        return field
+        return true
     }
 }
 
 
 export const FieldService =  new class {
-    async getOne(id: string){
-        let result = await (new FieldRequestEnity({id})).verifyIsField()
-        if(result instanceof ResponseError){
+    async getOne(id: string): Promise<Rejoin>{
+        let result: RejoinError | Field = await (new FieldEnity({id})).verifyIsField()
+        if(result instanceof RejoinError){
             return result
         }else{
-            let field = FieldSerializer(result)
-            return new ResponseSuccess({
+            let field: IFieldSerializer = FieldSerializer(result)
+            return new RejoinSuccess({
                 content: field,
                 status: 200
             })
         }
     }
-    async getList(limit: number, skip: number){
-        let fields = await Field.find().limit(limit).skip(skip).exec()
-        let list = []
+    async getList(limit: number, skip: number): Promise<Rejoin>{
+        let fields: Field[] = await Field.find().limit(limit).skip(skip).exec()
+        let list: IFieldSerializer[] = []
         for (let field of fields) {
             let item = await FieldSerializer(field)
             list.push(item)
         }
-        let count = await Field.count().exec()
-        return new ResponseSuccess({
+        let count: number = await Field.count().exec()
+        return new RejoinSuccess({
             content: {
                 list: list,
                 count: count
@@ -169,27 +134,39 @@ export const FieldService =  new class {
             status: 200
         })
     }
-    async setField(data: IFieldData) {
-        let result = await (new FieldRequestEnity({data})).verifySetField()
-        if(result instanceof ResponseError)
-            return result
+    async set(data: IFieldData): Promise<Rejoin>{
+        let fieldEnity = new FieldEnity({data})
+        let resultVerify: RejoinError | true | Field
+
+        resultVerify = await fieldEnity.verifySetField()
+        if(resultVerify instanceof RejoinError)
+            return resultVerify
+        resultVerify = await fieldEnity.verifySetData()
+        if(resultVerify instanceof RejoinError)
+            return resultVerify
     
-        let field = new Field(data)
+        let field: Field = new Field(data)
         await field.save()
         Request.updateExtraFields()
-        let content = await FieldSerializer(field)
-        return new ResponseSuccess({
+        let content: IFieldSerializer = await FieldSerializer(field)
+        return new RejoinSuccess({
             description: 'Поле создано',
             content: content,
             status: 200
         })
     }
-    async changeField(id: string, data: IFieldData){    
-        let result = await (new FieldRequestEnity({id, data})).verifyChangeField()
-        if(result instanceof ResponseError)
-            return result
+    async change(id: string, data: IFieldData): Promise<Rejoin>{
+        let fieldEnity = new FieldEnity({data})
+        let resultVerify: RejoinError | true | Field
+
+        resultVerify = await fieldEnity.verifySetData()
+        if(resultVerify instanceof RejoinError)
+            return resultVerify
+        resultVerify = await fieldEnity.verifyIsField()
+        if(resultVerify instanceof RejoinError)
+            return resultVerify
     
-        let field = result
+        let field: Field = resultVerify
         field.name = data.name
         field.inputType = data.inputType
         field.required = data.required
@@ -197,22 +174,23 @@ export const FieldService =  new class {
         field.default = data.default
         await field.save()
         Request.updateExtraFields()
-        let content = FieldSerializer(field)
-        return new ResponseSuccess({
+        let content: IFieldSerializer = FieldSerializer(field)
+        return new RejoinSuccess({
             description: 'Поле изменено',
             content: content,
             status: 200
         })
     }
-    async deleteField(id: string){
-        let result: ResponseError | Field = await (new FieldRequestEnity({id})).verifyIsField()
-        if(result instanceof ResponseError)
-            return result
-    
-        await result.remove()
+    async delete(id: string): Promise<Rejoin>{
+        let resultVerify: RejoinError | Field = await (new FieldEnity({id})).verifyIsField()
+        if(resultVerify instanceof RejoinError)
+            return resultVerify
+        
+        let field: Field = resultVerify
+        await field.remove()
         Request.updateExtraFields()
-        let content = await FieldSerializer(result)
-        return new ResponseSuccess({
+        let content: IFieldSerializer = await FieldSerializer(field)
+        return new RejoinSuccess({
             description: 'Удалено поле: ',
             content: content,
             status: 200

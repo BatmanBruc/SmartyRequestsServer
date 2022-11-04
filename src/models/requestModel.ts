@@ -1,5 +1,5 @@
 import { Schema, Model, model } from 'mongoose';
-import Field from './fieldModel'
+import { Field } from './fieldModel'
 
 interface IRequest {
     name: string;
@@ -30,8 +30,8 @@ const updateExtraFields = async (cntx: any)=>{
         }
     }
     const query = Field.find()
-    query.exec( async (err, fields)=>{
-        fields.map((field)=>{
+    query.exec( async (err: any, fields: Field[])=>{
+        fields.map((field: Field)=>{
             requestSchema.add({ 
                 [field.name]: { type: Schema.Types.Mixed, default: field.default, required: field.required }
             })
@@ -40,4 +40,4 @@ const updateExtraFields = async (cntx: any)=>{
 }
 requestSchema.static('updateExtraFields', function(){ updateExtraFields(this) })
 
-export default model<IRequest, IRequestMethods>('Request', requestSchema)
+export default class extends model<IRequest, IRequestMethods>('Request', requestSchema){}
